@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>График дежурных</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #1a1a2e;
+            color: #e0e0e0;
+            min-height: 100vh;
+            padding: 16px;
+            padding-bottom: 100px;
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 22px;
+            margin-bottom: 16px;
+            color: #ffffff;
+        }
+
+        /* Навигация по месяцам */
+        .month-nav {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .month-nav button {
+            background: #16213e;
+            border: 1px solid #0f3460;
+            color: #e0e0e0;
+            font-size: 20px;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+
+        .month-nav button:hover {
+            background: #0f3460;
+        }
+
+        .month-nav span {
+            font-size: 18px;
+            font-weight: 600;
+            min-width: 180px;
+            text-align: center;
+        }
+
+        /* Календарь */
+        .calendar {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 4px;
+            margin-bottom: 20px;
+        }
+
+        .calendar .day-header {
+            text-align: center;
+            font-size: 12px;
+            font-weight: 600;
+            color: #888;
+            padding: 8px 0;
+        }
+
+        .calendar .day {
+            aspect-ratio: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+            font-size: 14px;
+            cursor: pointer;
+            background: #16213e;
+            transition: background 0.2s, transform 0.1s;
+            position: relative;
+            min-height: 44px;
+        }
+
+        .calendar .day:hover {
+            background: #0f3460;
+            transform: scale(1.05);
+        }
+
+        .calendar .day.empty {
+            background: transparent;
+            cursor: default;
+        }
+
+        .calendar .day.empty:hover {
+            transform: none;
+        }
+
+        .calendar .day.has-duty {
+            background: rgba(0, 176, 155, 0.2);
+            border: 1px solid #00b09b;
+        }
+
+        .calendar .day.has-duty::after {
+            content: '';
+            width: 6px;
+            height: 6px;
+            background: #00b09b;
+            border-radius: 50%;
+            position: absolute;
+            bottom: 4px;
+        }
+
+        .calendar .day.today {
+            border: 2px solid #ffd700;
+        }
+
+        .calendar .day .day-number {
+            font-weight: 500;
+        }
+
+        .calendar .day .duty-name {
+            font-size: 9px;
+            color: #00b09b;
+            margin-top: 2px;
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            padding: 0 2px;
+        }
+
+        /* Модальное окно */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: #16213e;
+            border-radius: 16px;
+            padding: 24px;
+            width: 100%;
+            max-width: 340px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal h2 {
+            font-size: 18px;
+            margin-bottom: 16px;
+            color: #ffffff;
+        }
+
+        .modal .person-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .modal .person-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            background: #1a1a2e;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .modal .person-item:hover {
+            background: #0f3460;
+        }
+
+        .modal .person-item input[type="radio"] {
+            accent-color: #00b09b;
+            width: 18px;
+            height: 18px;
+        }
+
+        .modal .person-item label {
+            cursor: pointer;
+            font-size: 15px;
+        }
+
+        .modal .person-item .person-username {
+            font-size: 12px;
+            color: #888;
+            margin-left: auto;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .modal-buttons button {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        .modal-buttons button:hover {
+            opacity: 0.85;
+        }
+
+        .btn-assign {
+            background: #00b09b;
+            color: #fff;
+        }
+
+        .btn-cancel {
+            background: #333;
+            color: #e0e0e0;
+        }
+
+        .btn-unassign {
+            background: #e74c3c;
+            color: #fff;
+            margin-bottom: 10px;
+        }
+
+        /* Таблица дежурных */
+        .schedule-section {
+            margin-top: 20px;
+        }
+
+        .schedule-section h2 {
+            font-size: 18px;
+            margin-bottom: 12px;
+        }
+
+        .schedule-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .schedule-table th {
+            text-align: left;
+            padding: 10px 8px;
+            font-size: 13px;
+            color: #888;
+            border-bottom: 1px solid #333;
+        }
+
+        .schedule-table td {
+            padding: 10px 8px;
+            font-size: 14px;
+            border-bottom: 1px solid #222;
+        }
+
+        .schedule-table .btn-delete {
+            background: none;
+            border: none;
+            color: #e74c3c;
+            font-size: 18px;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 6px;
+            transition: background 0.2s;
+        }
+
+        .schedule-table .btn-delete:hover {
+            background: rgba(231, 76, 60, 0.15);
+        }
+
+        .empty-message {
+            text-align: center;
+            color: #666;
+            padding: 20px;
+            font-size: 14px;
+        }
+
+        /* Кнопки внизу */
+        .bottom-buttons {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            display: flex;
+            gap: 10px;
+            padding: 12px 16px;
+            background: #1a1a2e;
+            border-top: 1px solid #333;
+        }
+
+        .bottom-buttons button {
+            flex: 1;
+            padding: 14px;
+            border: none;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        .bottom-buttons button:hover {
+            opacity: 0.85;
+        }
+
+        .btn-clear-all {
+            background: #e74c3c;
+            color: #fff;
+        }
+
+        .btn-send {
+            background: #00b09b;
+            color: #fff;
+        }
+
+        /* Табы навигации */
+        .tabs {
+            display: flex;
+            gap: 0;
+            margin-bottom: 16px;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #16213e;
+        }
+
+        .tabs button {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            background: #16213e;
+            color: #888;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+        }
+
+        .tabs button.active {
+            background: #0f3460;
+            color: #fff;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Вкладка Люди */
+        .people-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .people-list-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 14px;
+            background: #16213e;
+            border-radius: 10px;
+        }
+
+        .people-list-item .person-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .people-list-item .person-info .name {
+            font-size: 15px;
+            font-weight: 500;
+        }
+
+        .people-list-item .person-info .uname {
+            font-size: 13px;
+            color: #888;
+        }
+
+        .people-list-item .btn-remove {
+            background: none;
+            border: none;
+            color: #e74c3c;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 6px;
+            transition: background 0.2s;
+        }
+
+        .people-list-item .btn-remove:hover {
+            background: rgba(231, 76, 60, 0.15);
+        }
+
+        .add-person-form {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            background: #16213e;
+            padding: 16px;
+            border-radius: 12px;
+        }
+
+        .add-person-form input {
+            padding: 12px;
+            border: 1px solid #0f3460;
+            border-radius: 8px;
+            background: #1a1a2e;
+            color: #e0e0e0;
+            font-size: 15px;
+            outline: none;
+        }
+
+        .add-person-form input:focus {
+            border-color: #00b09b;
+        }
+
+        .add-person-form button {
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            background: #00b09b;
+            color: #fff;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        .add-person-form button:hover {
+            opacity: 0.85;
+        }
+
+        .people-empty {
+            text-align: center;
+            color: #666;
+            padding: 20px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Табы -->
+    <div class="tabs">
+        <button class="active" id="tabSchedule" onclick="switchTab('schedule')">📅 График</button>
+        <button id="tabPeople" onclick="switchTab('people')">👥 Дежурные</button>
+    </div>
+
+    <!-- === Вкладка: График === -->
+    <div class="tab-content active" id="contentSchedule">
+
+    <h1>📅 График дежурных</h1>
+
+    <!-- Навигация по месяцам -->
+    <div class="month-nav">
+        <button id="prevMonth">←</button>
+        <span id="monthLabel"></span>
+        <button id="nextMonth">→</button>
+    </div>
+
+    <!-- Календарь -->
+    <div class="calendar" id="calendar"></div>
+
+    <!-- Модальное окно -->
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal">
+            <h2 id="modalTitle"></h2>
+            <button class="btn-unassign" id="btnUnassign" style="display:none; width:100%;">
+                🗑 Снять дежурного
+            </button>
+            <div class="person-list" id="personList"></div>
+            <div class="modal-buttons">
+                <button class="btn-cancel" id="btnCancel">Отмена</button>
+                <button class="btn-assign" id="btnAssign">Назначить</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Таблица дежурных -->
+    <div class="schedule-section">
+        <h2>📋 Все дежурные:</h2>
+        <table class="schedule-table">
+            <thead>
+                <tr>
+                    <th>Дата</th>
+                    <th>Имя</th>
+                    <th>@username</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody id="scheduleBody"></tbody>
+        </table>
+        <div class="empty-message" id="emptyMessage">Нет назначенных дежурных</div>
+    </div>
+
+    </div><!-- /contentSchedule -->
+
+    <!-- === Вкладка: Люди === -->
+    <div class="tab-content" id="contentPeople">
+        <h1>👥 Список дежурных</h1>
+        <div class="people-list" id="peopleList"></div>
+        <div class="people-empty" id="peopleEmpty" style="display:none;">Список пуст</div>
+
+        <div class="add-person-form">
+            <input type="text" id="inputName" placeholder="Имя">
+            <input type="text" id="inputUsername" placeholder="@username">
+            <button onclick="addPerson()">➕ Добавить</button>
+        </div>
+    </div>
+
+    <!-- Кнопки внизу -->
+    <div class="bottom-buttons">
+        <button class="btn-clear-all" id="btnClearAll">🗑 Очистить всё</button>
+        <button class="btn-send" id="btnSend">✉️ Отправить в чат</button>
+    </div>
+
+    <script>
+        // --- Инициализация Telegram WebApp ---
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+        tg.ready();
+
+        // --- Данные ---
+        // Список дежурных (загружается из бота или localStorage)
+        let people = [];
+        let schedule = {}; // { "2026-03-18": { user_id, username, name } }
+        let currentDate = new Date();
+        let selectedDate = null;
+
+        const MONTHS_RU = [
+            'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+            'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
+        ];
+        const DAYS_RU = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+
+        // Загрузка данных из localStorage
+        function loadData() {
+            try {
+                const savedPeople = localStorage.getItem('duty_people');
+                if (savedPeople) people = JSON.parse(savedPeople);
+
+                const savedSchedule = localStorage.getItem('duty_schedule');
+                if (savedSchedule) schedule = JSON.parse(savedSchedule);
+            } catch (e) {
+                console.error('Ошибка загрузки данных:', e);
+            }
+        }
+
+        function saveData() {
+            localStorage.setItem('duty_people', JSON.stringify(people));
+            localStorage.setItem('duty_schedule', JSON.stringify(schedule));
+        }
+
+        // --- Календарь ---
+
+        function renderCalendar() {
+            const cal = document.getElementById('calendar');
+            const year = currentDate.getFullYear();
+            const month = currentDate.getMonth();
+
+            // Заголовок месяца
+            document.getElementById('monthLabel').textContent =
+                `${MONTHS_RU[month]} ${year}`;
+
+            cal.innerHTML = '';
+
+            // Заголовки дней недели
+            DAYS_RU.forEach(day => {
+                const el = document.createElement('div');
+                el.className = 'day-header';
+                el.textContent = day;
+                cal.appendChild(el);
+            });
+
+            // Первый день месяца
+            const firstDay = new Date(year, month, 1);
+            let startDay = firstDay.getDay(); // 0=Вс, 1=Пн, ...
+            startDay = startDay === 0 ? 6 : startDay - 1; // Пн=0
+
+            // Количество дней в месяце
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+            const today = new Date();
+            const todayStr = formatDate(today);
+
+            // Пустые ячейки до первого дня
+            for (let i = 0; i < startDay; i++) {
+                const el = document.createElement('div');
+                el.className = 'day empty';
+                cal.appendChild(el);
+            }
+
+            // Дни месяца
+            for (let d = 1; d <= daysInMonth; d++) {
+                const dateStr = formatDate(new Date(year, month, d));
+                const el = document.createElement('div');
+                el.className = 'day';
+
+                if (dateStr === todayStr) el.classList.add('today');
+                if (schedule[dateStr]) el.classList.add('has-duty');
+
+                const numEl = document.createElement('span');
+                numEl.className = 'day-number';
+                numEl.textContent = d;
+                el.appendChild(numEl);
+
+                if (schedule[dateStr]) {
+                    const nameEl = document.createElement('span');
+                    nameEl.className = 'duty-name';
+                    nameEl.textContent = schedule[dateStr].name;
+                    el.appendChild(nameEl);
+                }
+
+                el.addEventListener('click', () => openModal(dateStr));
+                cal.appendChild(el);
+            }
+        }
+
+        function formatDate(date) {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
+        function formatDateRu(dateStr) {
+            const [y, m, d] = dateStr.split('-');
+            return `${d}.${m}.${y}`;
+        }
+
+        // --- Модальное окно ---
+
+        function openModal(dateStr) {
+            selectedDate = dateStr;
+            const modal = document.getElementById('modalOverlay');
+            const title = document.getElementById('modalTitle');
+            const list = document.getElementById('personList');
+            const btnUnassign = document.getElementById('btnUnassign');
+
+            title.textContent = `📅 ${formatDateRu(dateStr)}`;
+
+            // Показать кнопку снятия, если дежурный назначен
+            if (schedule[dateStr]) {
+                btnUnassign.style.display = 'block';
+                btnUnassign.textContent = `🗑 Снять: ${schedule[dateStr].name}`;
+            } else {
+                btnUnassign.style.display = 'none';
+            }
+
+            // Список людей с радиокнопками
+            list.innerHTML = '';
+
+            if (people.length === 0) {
+                list.innerHTML = '<div style="text-align:center;color:#888;padding:16px;">Нет дежурных. Добавьте через /addadmin в боте.</div>';
+            }
+
+            people.forEach((person, i) => {
+                const item = document.createElement('div');
+                item.className = 'person-item';
+
+                const isChecked = schedule[dateStr] && schedule[dateStr].user_id === person.id;
+
+                item.innerHTML = `
+                    <input type="radio" name="person" id="person_${i}" value="${i}" ${isChecked ? 'checked' : ''}>
+                    <label for="person_${i}">${person.name}</label>
+                    <span class="person-username">${person.username ? '@' + person.username : ''}</span>
+                `;
+
+                item.addEventListener('click', () => {
+                    document.getElementById(`person_${i}`).checked = true;
+                });
+
+                list.appendChild(item);
+            });
+
+            modal.classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('modalOverlay').classList.remove('active');
+            selectedDate = null;
+        }
+
+        function assignDuty() {
+            if (!selectedDate) return;
+
+            const selected = document.querySelector('input[name="person"]:checked');
+            if (!selected) {
+                tg.showAlert('Выберите дежурного!');
+                return;
+            }
+
+            const person = people[parseInt(selected.value)];
+            schedule[selectedDate] = {
+                user_id: person.id,
+                username: person.username,
+                name: person.name,
+            };
+
+            saveData();
+            renderCalendar();
+            renderScheduleTable();
+            closeModal();
+        }
+
+        function unassignDuty() {
+            if (!selectedDate || !schedule[selectedDate]) return;
+
+            delete schedule[selectedDate];
+            saveData();
+            renderCalendar();
+            renderScheduleTable();
+            closeModal();
+        }
+
+        // --- Таблица дежурных ---
+
+        function renderScheduleTable() {
+            const tbody = document.getElementById('scheduleBody');
+            const emptyMsg = document.getElementById('emptyMessage');
+
+            const entries = Object.entries(schedule).sort(([a], [b]) => a.localeCompare(b));
+
+            if (entries.length === 0) {
+                tbody.innerHTML = '';
+                emptyMsg.style.display = 'block';
+                return;
+            }
+
+            emptyMsg.style.display = 'none';
+            tbody.innerHTML = '';
+
+            entries.forEach(([date, duty]) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${formatDateRu(date)}</td>
+                    <td>${duty.name}</td>
+                    <td>${duty.username ? '@' + duty.username : '—'}</td>
+                    <td><button class="btn-delete" data-date="${date}">🗑</button></td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            // Обработчики удаления
+            tbody.querySelectorAll('.btn-delete').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const date = btn.dataset.date;
+                    delete schedule[date];
+                    saveData();
+                    renderCalendar();
+                    renderScheduleTable();
+                });
+            });
+        }
+
+        // --- Кнопки внизу ---
+
+        function clearAll() {
+            tg.showConfirm('Очистить весь график?', (confirmed) => {
+                if (confirmed) {
+                    schedule = {};
+                    saveData();
+                    renderCalendar();
+                    renderScheduleTable();
+
+                    // Отправляем команду боту
+                    tg.sendData(JSON.stringify({ action: 'clear_all' }));
+                }
+            });
+        }
+
+        function sendToChat() {
+            const entries = Object.entries(schedule).sort(([a], [b]) => a.localeCompare(b));
+
+            if (entries.length === 0) {
+                tg.showAlert('График пуст!');
+                return;
+            }
+
+            // Формируем данные для отправки
+            const scheduleList = entries.map(([date, duty]) => ({
+                date: date,
+                user_id: duty.user_id,
+                username: duty.username,
+                name: duty.name,
+            }));
+
+            // Сначала сохраняем в боте, потом отправляем в чат
+            tg.sendData(JSON.stringify({
+                action: 'save_schedule',
+                schedule: scheduleList,
+            }));
+        }
+
+        // --- Обработчики событий ---
+
+        document.getElementById('prevMonth').addEventListener('click', () => {
+            currentDate.setMonth(currentDate.getMonth() - 1);
+            renderCalendar();
+        });
+
+        document.getElementById('nextMonth').addEventListener('click', () => {
+            currentDate.setMonth(currentDate.getMonth() + 1);
+            renderCalendar();
+        });
+
+        document.getElementById('btnCancel').addEventListener('click', closeModal);
+        document.getElementById('btnAssign').addEventListener('click', assignDuty);
+        document.getElementById('btnUnassign').addEventListener('click', unassignDuty);
+        document.getElementById('btnClearAll').addEventListener('click', clearAll);
+        document.getElementById('btnSend').addEventListener('click', sendToChat);
+
+        // Закрытие модалки по клику на оверлей
+        document.getElementById('modalOverlay').addEventListener('click', (e) => {
+            if (e.target === e.currentTarget) closeModal();
+        });
+
+        // --- Табы ---
+
+        function switchTab(tab) {
+            document.getElementById('tabSchedule').classList.toggle('active', tab === 'schedule');
+            document.getElementById('tabPeople').classList.toggle('active', tab === 'people');
+            document.getElementById('contentSchedule').classList.toggle('active', tab === 'schedule');
+            document.getElementById('contentPeople').classList.toggle('active', tab === 'people');
+
+            // Скрыть/показать кнопки внизу (только для графика)
+            document.querySelector('.bottom-buttons').style.display = tab === 'schedule' ? 'flex' : 'none';
+        }
+
+        // --- Вкладка Люди ---
+
+        function loadPeopleFromURL() {
+            try {
+                const params = new URLSearchParams(window.location.search);
+                const peopleParam = params.get('people');
+                if (peopleParam) {
+                    const parsed = JSON.parse(peopleParam);
+                    if (Array.isArray(parsed)) {
+                        people = parsed;
+                        saveData();
+                    }
+                }
+            } catch (e) {
+                console.error('Ошибка парсинга people из URL:', e);
+            }
+        }
+
+        function renderPeopleList() {
+            const list = document.getElementById('peopleList');
+            const empty = document.getElementById('peopleEmpty');
+            list.innerHTML = '';
+
+            if (people.length === 0) {
+                empty.style.display = 'block';
+                return;
+            }
+
+            empty.style.display = 'none';
+
+            people.forEach((person) => {
+                const item = document.createElement('div');
+                item.className = 'people-list-item';
+                item.innerHTML = `
+                    <div class="person-info">
+                        <span class="name">${person.name}</span>
+                        <span class="uname">@${person.username}</span>
+                    </div>
+                    <button class="btn-remove" data-username="${person.username}">🗑</button>
+                `;
+                list.appendChild(item);
+            });
+
+            list.querySelectorAll('.btn-remove').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    removePerson(btn.dataset.username);
+                });
+            });
+        }
+
+        function addPerson() {
+            const nameInput = document.getElementById('inputName');
+            const usernameInput = document.getElementById('inputUsername');
+            const name = nameInput.value.trim();
+            const username = usernameInput.value.trim().replace(/^@/, '');
+
+            if (!name || !username) {
+                tg.showAlert('Заполните имя и @username!');
+                return;
+            }
+
+            // Добавить локально
+            people.push({ name, username });
+            saveData();
+            renderPeopleList();
+
+            // Отправить боту
+            tg.sendData(JSON.stringify({ action: 'add_person', name, username }));
+
+            nameInput.value = '';
+            usernameInput.value = '';
+        }
+
+        function removePerson(username) {
+            tg.showConfirm(`Удалить @${username}?`, (confirmed) => {
+                if (confirmed) {
+                    people = people.filter(p => p.username !== username);
+                    saveData();
+                    renderPeopleList();
+
+                    tg.sendData(JSON.stringify({ action: 'remove_person', username }));
+                }
+            });
+        }
+
+        // --- Инициализация ---
+
+        loadData();
+        loadPeopleFromURL();
+
+        renderCalendar();
+        renderScheduleTable();
+        renderPeopleList();
+    </script>
+</body>
+</html>
