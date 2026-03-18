@@ -533,6 +533,7 @@
         <div class="add-person-form">
             <input type="text" id="inputName" placeholder="Имя">
             <input type="text" id="inputUsername" placeholder="@username">
+            <input type="number" id="inputUserId" placeholder="Telegram ID">
             <button onclick="addPerson()">➕ Добавить</button>
         </div>
     </div>
@@ -893,6 +894,7 @@
                     <div class="person-info">
                         <span class="name">${person.name}</span>
                         <span class="uname">@${person.username}</span>
+                        ${person.user_id ? `<span class="uname" style="font-size:11px;opacity:0.6;">ID: ${person.user_id}</span>` : ''}
                     </div>
                     <button class="btn-remove" data-username="${person.username}">🗑</button>
                 `;
@@ -909,8 +911,10 @@
         function addPerson() {
             const nameInput = document.getElementById('inputName');
             const usernameInput = document.getElementById('inputUsername');
+            const userIdInput = document.getElementById('inputUserId');
             const name = nameInput.value.trim();
             const username = usernameInput.value.trim().replace(/^@/, '');
+            const user_id = parseInt(userIdInput.value.trim()) || 0;
 
             if (!name || !username) {
                 tg.showAlert('Заполните имя и @username!');
@@ -918,15 +922,16 @@
             }
 
             // Добавить локально
-            people.push({ name, username });
+            people.push({ name, username, user_id });
             saveData();
             renderPeopleList();
 
             // Отправить боту
-            tg.sendData(JSON.stringify({ action: 'add_person', name, username }));
+            tg.sendData(JSON.stringify({ action: 'add_person', name, username, user_id }));
 
             nameInput.value = '';
             usernameInput.value = '';
+            userIdInput.value = '';
         }
 
         function removePerson(username) {
