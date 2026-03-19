@@ -859,9 +859,11 @@
 
         // --- Вкладка Люди ---
 
-        function loadPeopleFromURL() {
+        function loadFromURL() {
             try {
                 const params = new URLSearchParams(window.location.search);
+
+                // Загружаем людей из URL (из БД бота)
                 const peopleParam = params.get('people');
                 if (peopleParam) {
                     const parsed = JSON.parse(peopleParam);
@@ -870,8 +872,18 @@
                         saveData();
                     }
                 }
+
+                // Загружаем график из URL (из БД бота)
+                const scheduleParam = params.get('schedule');
+                if (scheduleParam) {
+                    const parsed = JSON.parse(scheduleParam);
+                    if (typeof parsed === 'object' && parsed !== null) {
+                        schedule = parsed;
+                        saveData();
+                    }
+                }
             } catch (e) {
-                console.error('Ошибка парсинга people из URL:', e);
+                console.error('Ошибка парсинга данных из URL:', e);
             }
         }
 
@@ -949,7 +961,7 @@
         // --- Инициализация ---
 
         loadData();
-        loadPeopleFromURL();
+        loadFromURL();
 
         renderCalendar();
         renderScheduleTable();
