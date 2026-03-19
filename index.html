@@ -960,21 +960,33 @@
 
         // --- Загрузка дежурных из GitHub JSON ---
 
-        async function loadPeopleFromGitHub() {
+        async function loadFromGitHub() {
             try {
-                // Добавляем timestamp чтобы обойти кэш
-                const resp = await fetch('data/people.json?t=' + Date.now());
-                if (!resp.ok) throw new Error('Файл не найден');
-                const data = await resp.json();
+                const t = Date.now();
 
-                if (Array.isArray(data) && data.length > 0) {
-                    people = data;
-                    saveData();
-                    renderCalendar();
-                    renderScheduleTable();
-                    renderPeopleList();
-                    console.log('Дежурные загружены из GitHub:', data.length);
+                // Загружаем дежурных
+                const pResp = await fetch('data/people.json?t=' + t);
+                if (pResp.ok) {
+                    const pData = await pResp.json();
+                    if (Array.isArray(pData) && pData.length > 0) {
+                        people = pData;
+                    }
                 }
+
+                // Загружаем расписание
+                const sResp = await fetch('data/schedule.json?t=' + t);
+                if (sResp.ok) {
+                    const sData = await sResp.json();
+                    if (typeof sData === 'object' && sData !== null) {
+                        schedule = sData;
+                    }
+                }
+
+                saveData();
+                renderCalendar();
+                renderScheduleTable();
+                renderPeopleList();
+                console.log('Данные загружены из GitHub');
             } catch (e) {
                 console.warn('GitHub JSON недоступен, используем localStorage:', e);
             }
@@ -989,8 +1001,8 @@
         renderScheduleTable();
         renderPeopleList();
 
-        // Загружаем актуальные данные дежурных из GitHub
-        loadPeopleFromGitHub();
+        // Загружаем актуальные данные из GitHub
+        loadFromGitHub();
     </script>
 </body>
 </html>
