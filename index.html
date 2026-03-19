@@ -563,32 +563,7 @@
         ];
         const DAYS_RU = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 
-        // --- CloudStorage (Telegram) ---
-
-        function loadData() {
-            // Загрузка из CloudStorage
-            if (tg.CloudStorage) {
-                tg.CloudStorage.getItems(['duty_people', 'duty_schedule'], (err, values) => {
-                    if (err) {
-                        console.error('CloudStorage read error:', err);
-                        loadFromLocalStorage();
-                        return;
-                    }
-                    try {
-                        if (values.duty_people) people = JSON.parse(values.duty_people);
-                        if (values.duty_schedule) schedule = JSON.parse(values.duty_schedule);
-                    } catch (e) {
-                        console.error('CloudStorage parse error:', e);
-                    }
-                    renderCalendar();
-                    renderScheduleTable();
-                    renderPeopleList();
-                    console.log('Данные загружены из CloudStorage');
-                });
-            } else {
-                loadFromLocalStorage();
-            }
-        }
+        // --- Хранение данных ---
 
         function loadFromLocalStorage() {
             try {
@@ -602,13 +577,34 @@
         }
 
         function saveData() {
-            // Сохраняем в CloudStorage + localStorage (fallback)
             localStorage.setItem('duty_people', JSON.stringify(people));
             localStorage.setItem('duty_schedule', JSON.stringify(schedule));
+        }
 
-            if (tg.CloudStorage) {
-                tg.CloudStorage.setItem('duty_people', JSON.stringify(people));
-                tg.CloudStorage.setItem('duty_schedule', JSON.stringify(schedule));
+        // Главная загрузка — всегда из GitHub (единый источник для всех)
+        async function loadFromGitHub() {
+            try {
+                const t = Date.now();
+
+                const pResp = await fetch('data/people.json?t=' + t);
+                if (pResp.ok) {
+                    const pData = await pResp.json();
+                    if (Array.isArray(pData)) people = pData;
+                }
+
+                const sResp = await fetch('data/schedule.json?t=' + t);
+                if (sResp.ok) {
+                    const sData = await sResp.json();
+                    if (typeof sData === 'object' && sData !== null) schedule = sData;
+                }
+
+                saveData();
+                renderCalendar();
+                renderScheduleTable();
+                renderPeopleList();
+                console.log('Данные загружены из GitHub');
+            } catch (e) {
+                console.warn('GitHub недоступен:', e);
             }
         }
 
@@ -989,70 +985,17 @@
             });
         }
 
-        // --- Fallback: GitHub JSON если CloudStorage пуст ---
-
-        async function loadFromGitHubFallback() {
-            try {
-                const t = Date.now();
-                const pResp = await fetch('data/people.json?t=' + t);
-                if (pResp.ok) {
-                    const pData = await pResp.json();
-                    if (Array.isArray(pData) && pData.length > 0) {
-                        people = pData;
-                    }
-                }
-                const sResp = await fetch('data/schedule.json?t=' + t);
-                if (sResp.ok) {
-                    const sData = await sResp.json();
-                    if (typeof sData === 'object' && sData !== null && Object.keys(sData).length > 0) {
-                        schedule = sData;
-                    }
-                }
-                saveData();
-                renderCalendar();
-                renderScheduleTable();
-                renderPeopleList();
-            } catch (e) {
-                console.warn('GitHub fallback failed:', e);
-            }
-        }
-
         // --- Инициализация ---
 
-        // 1. Мгновенно из localStorage
+        // 1. Мгновенно из localStorage (показать что есть)
         loadFromLocalStorage();
         loadFromURL();
         renderCalendar();
         renderScheduleTable();
         renderPeopleList();
 
-        // 2. Из CloudStorage (асинхронно)
-        if (tg.CloudStorage) {
-            tg.CloudStorage.getItems(['duty_people', 'duty_schedule'], (err, values) => {
-                if (err || (!values.duty_people && !values.duty_schedule)) {
-                    // CloudStorage пуст — загружаем из GitHub
-                    loadFromGitHubFallback();
-                    return;
-                }
-                try {
-                    if (values.duty_people) people = JSON.parse(values.duty_people);
-                    if (values.duty_schedule) schedule = JSON.parse(values.duty_schedule);
-                } catch (e) {}
-                
-                // Если people пуст после CloudStorage — fallback на GitHub
-                if (people.length === 0) {
-                    loadFromGitHubFallback();
-                    return;
-                }
-                
-                saveData();
-                renderCalendar();
-                renderScheduleTable();
-                renderPeopleList();
-            });
-        } else {
-            loadFromGitHubFallback();
-        }
+        // 2. Обновить из GitHub (единый источник правды для всех пользователей)
+        loadFromGitHub();
     </script>
 </body>
 </html>
