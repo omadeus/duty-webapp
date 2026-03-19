@@ -958,6 +958,28 @@
             });
         }
 
+        // --- Загрузка дежурных из GitHub JSON ---
+
+        async function loadPeopleFromGitHub() {
+            try {
+                // Добавляем timestamp чтобы обойти кэш
+                const resp = await fetch('data/people.json?t=' + Date.now());
+                if (!resp.ok) throw new Error('Файл не найден');
+                const data = await resp.json();
+
+                if (Array.isArray(data) && data.length > 0) {
+                    people = data;
+                    saveData();
+                    renderCalendar();
+                    renderScheduleTable();
+                    renderPeopleList();
+                    console.log('Дежурные загружены из GitHub:', data.length);
+                }
+            } catch (e) {
+                console.warn('GitHub JSON недоступен, используем localStorage:', e);
+            }
+        }
+
         // --- Инициализация ---
 
         loadData();
@@ -966,6 +988,9 @@
         renderCalendar();
         renderScheduleTable();
         renderPeopleList();
+
+        // Загружаем актуальные данные дежурных из GitHub
+        loadPeopleFromGitHub();
     </script>
 </body>
 </html>
